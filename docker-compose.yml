@@ -8,6 +8,13 @@ services:
     volumes:
       - ~/localLLM/df:/df
       - ~/localLLM/ollama:/root/.ollama
+    entrypoint: >
+      bash -c "
+        /bin/ollama serve &
+        sleep 5 &&
+        ollama pull qwen3-coder:30b &&
+        wait
+      "
     deploy:
       resources:
         reservations:
@@ -26,11 +33,32 @@ services:
       - ollama
     volumes:
       - ~/localLLM/df:/df
+      - claude-home:/root
     environment:
-      - OLLAMA_HOST=http://ollama:11434
-    command: bash -c "npm install -g @anthropic-ai/claude-code && sleep infinity"
+      - ANTHROPIC_BASE_URL=http://ollama:11434
+      - ANTHROPIC_AUTH_TOKEN=ollama
+      - ANTHROPIC_API_KEY=ollama
+      - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+    command: >
+      bash -c "
+        npm install -g @anthropic-ai/claude-code &&
+        mkdir -p /root/.claude &&
+        cat > /root/.claude/settings.json <<'SETTINGS'
+      {
+        \"model\": \"qwen3-coder:30b\",
+        \"env\": {
+          \"ANTHROPIC_BASE_URL\": \"http://ollama:11434\",
+          \"ANTHROPIC_AUTH_TOKEN\": \"ollama\"
+        }
+      }
+      SETTINGS
+        sleep infinity
+      "
     networks:
       - ollama
+
+volumes:
+  claude-home:
 
 networks:
   ollama:
