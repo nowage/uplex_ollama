@@ -1,0 +1,49 @@
+FROM debian:bookworm-slim
+
+# locale, 환경변수
+ENV LC_ALL=C.UTF-8
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Node.js 22 설치
+RUN apt-get update && \
+    apt-get install -y curl git && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Claude Code 설치
+RUN npm install -g @anthropic-ai/claude-code
+
+# uplexsoft 유저 생성 (UID 1000)
+RUN groupadd -g 1000 uplexsoft && \
+    useradd -m -u 1000 -g 1000 -s /bin/bash uplexsoft
+
+# 환경변수를 bashrc에 등록
+RUN cat >> /home/uplexsoft/.bashrc <<'EOF'
+export LC_ALL=C.UTF-8
+export ANTHROPIC_BASE_URL=http://ollama:11434
+export ANTHROPIC_AUTH_TOKEN=ollama
+export ANTHROPIC_API_KEY=ollama
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+EOF
+
+# settings.json 생성
+RUN mkdir -p /home/uplexsoft/.claude && \
+    cat > /home/uplexsoft/.claude/settings.json <<'SETTINGS'
+{
+  "model": "qwen3-coder:30b",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://ollama:11434",
+    "ANTHROPIC_AUTH_TOKEN": "ollama"
+  }
+}
+SETTINGS
+
+# 소유권 설정
+RUN chown -R uplexsoft:uplexsoft /home/uplexsoft
+
+# 기본 유저
+USER uplexsoft
+WORKDIR /home/uplexsoft
+
+CMD ["sleep", "infinity"]

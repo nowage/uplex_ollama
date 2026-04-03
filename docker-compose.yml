@@ -26,34 +26,22 @@ services:
       - ollama
 
   claude:
-    image: node:22-slim
+    image: claude
+    build:
+      context: .
+      dockerfile: Dockerfile.claude
     container_name: claude
     restart: unless-stopped
     depends_on:
       - ollama
     volumes:
-      - ~/localLLM/df:/df
-      - claude-home:/root
+      - ~/localLLM/df:/home/uplexsoft/df
+      - claude-home:/home/uplexsoft
     environment:
       - ANTHROPIC_BASE_URL=http://ollama:11434
       - ANTHROPIC_AUTH_TOKEN=ollama
       - ANTHROPIC_API_KEY=ollama
       - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
-    command: >
-      bash -c "
-        npm install -g @anthropic-ai/claude-code &&
-        mkdir -p /root/.claude &&
-        cat > /root/.claude/settings.json <<'SETTINGS'
-      {
-        \"model\": \"qwen3-coder:30b\",
-        \"env\": {
-          \"ANTHROPIC_BASE_URL\": \"http://ollama:11434\",
-          \"ANTHROPIC_AUTH_TOKEN\": \"ollama\"
-        }
-      }
-      SETTINGS
-        sleep infinity
-      "
     networks:
       - ollama
 
