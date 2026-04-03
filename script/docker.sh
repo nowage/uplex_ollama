@@ -1,68 +1,68 @@
 #!/bin/bash
-# Ollama GPU Docker 컨테이너 관리 스크립트
+# Ollama + Claude Docker Compose 관리 스크립트
 
-CONTAINER_NAME="ollama"
-IMAGE="ollama/ollama"
-PORT="11434"
-VOLUME_GENERAL="$HOME/localLLM/df:/df"
-VOLUME_WEIGHT="$HOME/localLLM/ollama:/root/.ollama"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPOSE_FILE="${SCRIPT_DIR}/../docker-compose.yml"
+COMPOSE="docker compose -f ${COMPOSE_FILE}"
 
 usage() {
-    echo "Usage: $0 {start|stop|restart|status|logs|pull}"
+    echo "Usage: $0 {up|down|restart|status|logs|pull} [service]"
+    echo ""
+    echo "Services: ollama, claude"
+    echo ""
+    echo "  up      [service]  - 컨테이너 시작"
+    echo "  down               - 전체 중지 및 제거"
+    echo "  restart [service]  - 재시작"
+    echo "  status             - 상태 확인"
+    echo "  logs    [service]  - 로그 조회"
+    echo "  pull    [service]  - 이미지 업데이트"
+    echo "  exec    <service>  - 컨테이너 접속 (bash)"
     exit 1
 }
 
-start() {
-    if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-        echo "[skip] ${CONTAINER_NAME} 이미 실행 중"
-        return
-    fi
-
-    # 중지된 컨테이너 존재 시 제거
-    if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-        docker rm "${CONTAINER_NAME}"
-    fi
-
-    echo "[start] ${CONTAINER_NAME}"
-    docker run -d \
-        --name "${CONTAINER_NAME}" \
-        --gpus all \
-        --restart unless-stopped \
-        -p "${PORT}:11434" \
-        -v "${VOLUME_GENERAL}" \
-        -v "${VOLUME_WEIGHT}" \
-        "${IMAGE}"
+up() {
+    echo "[up] ${1:-all}"
+    ${COMPOSE} up -d $1
 }
 
-stop() {
-    echo "[stop] ${CONTAINER_NAME}"
-    docker stop "${CONTAINER_NAME}"
+down() {
+    echo "[down] all"
+    ${COMPOSE} down
 }
 
 restart() {
-    stop
-    start
+    echo "[restart] ${1:-all}"
+    ${COMPOSE} restart $1
 }
 
 status() {
-    docker ps -a --filter "name=^${CONTAINER_NAME}$" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    ${COMPOSE} ps
 }
 
 logs() {
-    docker logs -f "${CONTAINER_NAME}"
+    ${COMPOSE} logs -f $1
 }
 
 pull() {
-    echo "[pull] ${IMAGE}"
-    docker pull "${IMAGE}"
+    echo "[pull] ${1:-all}"
+    ${COMPOSE} pull $1
+}
+
+exec_sh() {
+    if [ -z "$1" ]; then
+        echo "Usage: $0 exec <service>"
+        exit 1
+    fi
+    ${COMPOSE} exec "$1" bash
 }
 
 case "${1}" in
-    start)   start   ;;
-    stop)    stop    ;;
-    restart) restart ;;
-    status)  status  ;;
-    logs)    logs    ;;
-    pull)    pull    ;;
-    *)       usage   ;;
+    up)      up "$2"      ;;
+    down)    down          ;;
+    restart) restart "$2"  ;;
+    status)  status        ;;
+    logs)    logs "$2"     ;;
+    pull)    pull "$2"     ;;
+    exec)    exec_sh "$2"  ;;
+    *)       usage         ;;
 esac
