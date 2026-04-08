@@ -3,11 +3,14 @@ services:
     image: ollama/ollama
     container_name: ollama
     restart: unless-stopped
+    environment:
+      - OLLAMA_FLASH_ATTENTION=0
+      - CUDA_VISIBLE_DEVICES=0
     ports:
-      - "11434:11434"
+      - "11436:11434"
     volumes:
       - ~/localLLM/df:/df
-      - ~/localLLM/ollama:/root/.ollama
+      - ~/localLLM/ollama_docker:/root/.ollama
     entrypoint: >
       bash -c "
         /bin/ollama serve &
@@ -15,6 +18,12 @@ services:
         ollama pull qwen3-coder:30b &&
         wait
       "
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     deploy:
       resources:
         reservations:
@@ -33,14 +42,14 @@ services:
     container_name: claude
     restart: unless-stopped
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
     volumes:
       - ~/localLLM/df:/home/uplexsoft/df
       - claude-home:/home/uplexsoft
     environment:
       - ANTHROPIC_BASE_URL=http://ollama:11434
       - ANTHROPIC_AUTH_TOKEN=ollama
-      - ANTHROPIC_API_KEY=ollama
       - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
     networks:
       - ollama

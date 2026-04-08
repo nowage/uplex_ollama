@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Node.js 22 설치
 RUN apt-get update && \
-    apt-get install -y curl git && \
+    apt-get install -y curl git netcat-traditional && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -18,16 +18,35 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN groupadd -g 1000 uplexsoft && \
     useradd -m -u 1000 -g 1000 -s /bin/bash uplexsoft
 
-# 환경변수를 bashrc에 등록
-RUN cat >> /home/uplexsoft/.bashrc <<'EOF'
+# 시스템 전역 환경변수 설정 (모든 유저 공통)
+RUN cat >> /etc/environment <<'EOF'
+LC_ALL=C.UTF-8
+ANTHROPIC_BASE_URL=http://ollama:11434
+ANTHROPIC_AUTH_TOKEN=ollama
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+EOF
+
+# profile.d에도 환경변수 등록 (bash/sh 자동 로드)
+RUN cat > /etc/profile.d/claude.sh <<'EOF'
 export LC_ALL=C.UTF-8
 export ANTHROPIC_BASE_URL=http://ollama:11434
 export ANTHROPIC_AUTH_TOKEN=ollama
-export ANTHROPIC_API_KEY=ollama
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+export export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 EOF
 
-# settings.json 생성
+# root용 settings.json 생성
+RUN mkdir -p /root/.claude && \
+    cat > /root/.claude/settings.json <<'SETTINGS'
+{
+  "model": "qwen3-coder:30b",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://ollama:11434",
+    "ANTHROPIC_AUTH_TOKEN": "ollama"
+  }
+}
+SETTINGS
+
+# uplexsoft용 settings.json 생성
 RUN mkdir -p /home/uplexsoft/.claude && \
     cat > /home/uplexsoft/.claude/settings.json <<'SETTINGS'
 {
@@ -39,11 +58,26 @@ RUN mkdir -p /home/uplexsoft/.claude && \
 }
 SETTINGS
 
-# 소유권 설정
+# uplexsoft 홈 소유권 설정
 RUN chown -R uplexsoft:uplexsoft /home/uplexsoft
 
-# 기본 유저
+# Ollama 연결 대기 스크립트
+RUN cat > /usr/local/bin/wait-for-ollama.sh <<'SCRIPT'
+#!/bin/bash
+echo "Waiting for Ollama to be ready..."
+until nc -z ollama 11434; do
+  echo "Ollama is unavailable - sleeping"
+  sleep 2
+done
+echo "Ollama is up - starting Claude Code environment"
+exec "$@"
+SCRIPT
+
+RUN chmod +x /usr/local/bin/wait-for-ollama.sh
+
+# 기본 유저 (변경 가능: docker exec -u root ... 로 root 접근 가능)
 USER uplexsoft
 WORKDIR /home/uplexsoft
 
+ENTRYPOINT ["/usr/local/bin/wait-for-ollama.sh"]
 CMD ["sleep", "infinity"]
