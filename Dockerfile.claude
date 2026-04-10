@@ -1,8 +1,11 @@
 FROM debian:bookworm-slim
 
-# locale, 환경변수
+# 환경변수
 ENV LC_ALL=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
+ENV ANTHROPIC_BASE_URL=http://ollama:11434
+ENV ANTHROPIC_AUTH_TOKEN=ollama
+ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 
 # Node.js 22 설치
 RUN apt-get update && \
@@ -18,45 +21,11 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN groupadd -g 1000 uplexsoft && \
     useradd -m -u 1000 -g 1000 -s /bin/bash uplexsoft
 
-# 시스템 전역 환경변수 설정 (모든 유저 공통)
-RUN cat >> /etc/environment <<'EOF'
-LC_ALL=C.UTF-8
-ANTHROPIC_BASE_URL=http://ollama:11434
-ANTHROPIC_AUTH_TOKEN=ollama
-CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
-EOF
+# uplexsoft용 .claude 디렉토리 생성
+RUN mkdir -p /home/uplexsoft/.claude
 
-# profile.d에도 환경변수 등록 (bash/sh 자동 로드)
-RUN cat > /etc/profile.d/claude.sh <<'EOF'
-export LC_ALL=C.UTF-8
-export ANTHROPIC_BASE_URL=http://ollama:11434
-export ANTHROPIC_AUTH_TOKEN=ollama
-export export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
-EOF
-
-# root용 settings.json 생성
-RUN mkdir -p /root/.claude && \
-    cat > /root/.claude/settings.json <<'SETTINGS'
-{
-  "model": "qwen3-coder:30b",
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://ollama:11434",
-    "ANTHROPIC_AUTH_TOKEN": "ollama"
-  }
-}
-SETTINGS
-
-# uplexsoft용 settings.json 생성
-RUN mkdir -p /home/uplexsoft/.claude && \
-    cat > /home/uplexsoft/.claude/settings.json <<'SETTINGS'
-{
-  "model": "qwen3-coder:30b",
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://ollama:11434",
-    "ANTHROPIC_AUTH_TOKEN": "ollama"
-  }
-}
-SETTINGS
+# alias 설정 (시스템 전체)
+RUN echo "alias cc='claude --dangerously-skip-permissions'" >> /etc/bash.bashrc
 
 # uplexsoft 홈 소유권 설정
 RUN chown -R uplexsoft:uplexsoft /home/uplexsoft
@@ -64,12 +33,29 @@ RUN chown -R uplexsoft:uplexsoft /home/uplexsoft
 # Ollama 연결 대기 스크립트
 RUN cat > /usr/local/bin/wait-for-ollama.sh <<'SCRIPT'
 #!/bin/bash
-echo "Waiting for Ollama to be ready..."
-until nc -z ollama 11434; do
-  echo "Ollama is unavailable - sleeping"
-  sleep 2
-done
-echo "Ollama is up - starting Claude Code environment"
+# settings.json 동적 생성 (OLLAMA_MODEL 환경변수 반영)
+mkdir -p /home/uplexsoft/.claude
+cat > /home/uplexsoft/.claude/settings.json <<JSON
+{
+  "model": "${OLLAMA_MODEL}",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://ollama:11434",
+    "ANTHROPIC_AUTH_TOKEN": "ollama"
+  }
+}
+JSON
+
+# Ollama 호스트 해석 가능 여부 확인 (Docker Compose 네트워크 밖이면 스킵)
+if getent hosts ollama >/dev/null 2>&1; then
+  echo "Waiting for Ollama to be ready..."
+  until nc -z ollama 11434; do
+    echo "Ollama is unavailable - sleeping"
+    sleep 2
+  done
+  echo "Ollama is up - starting Claude Code environment"
+else
+  echo "Ollama host not found - running without Ollama"
+fi
 exec "$@"
 SCRIPT
 

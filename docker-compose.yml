@@ -9,13 +9,13 @@ services:
     ports:
       - "11436:11434"
     volumes:
-      - ~/localLLM/df:/df
-      - ~/localLLM/ollama_docker:/root/.ollama
+      - ~/df:/df
+      - ~/.docker:/root/.ollama
     entrypoint: >
       bash -c "
         /bin/ollama serve &
         sleep 5 &&
-        ollama pull qwen3-coder:30b &&
+        ollama pull ${OLLAMA_MODEL} || echo 'WARNING: model pull failed, continuing...' ;
         wait
       "
     healthcheck:
@@ -45,11 +45,13 @@ services:
       ollama:
         condition: service_healthy
     volumes:
-      - ~/localLLM/df:/home/uplexsoft/df
+      - ~/df:/home/uplexsoft/df
       - claude-home:/home/uplexsoft
     environment:
       - ANTHROPIC_BASE_URL=http://ollama:11434
       - ANTHROPIC_AUTH_TOKEN=ollama
+      - ANTHROPIC_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
       - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
     networks:
       - ollama
