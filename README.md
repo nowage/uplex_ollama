@@ -149,9 +149,13 @@ curl http://ollama:11434/api/tags
 
 ## CUDA OOM 에러 발생 시
 
-* qwen3-coder:30b (18GB)는 RTX 4070 Ti SUPER (16GB VRAM)에서 CPU/GPU 분할 로드됨
-* `OLLAMA_FLASH_ATTENTION=0` 환경변수로 CUDA graph 비활성화하여 해결
-* docker-compose.yml의 ollama 서비스에 설정됨
+* qwen3-coder:30b (18GB)는 RTX 4070 Ti SUPER (16GB VRAM)에서 원래 CPU/GPU 분할 로드됨
+* 검증된 최적화 환경변수 조합으로 VRAM 내 완전 로드 가능 (docker-compose.yml ollama 서비스에 설정됨)
+    - `OLLAMA_FLASH_ATTENTION=1` — Flash Attention 활성화 (성능 ↑)
+    - `OLLAMA_KV_CACHE_TYPE=q8_0` — KV cache 8bit 양자화 (VRAM 절감 핵심)
+    - `OLLAMA_NUM_GPU=999` — 전체 레이어 GPU 로드
+    - `OLLAMA_CONTEXT_LENGTH=100000` — 100K context 확보
+* 여전히 OOM 발생 시: `OLLAMA_FLASH_ATTENTION=0`으로 폴백(성능 저하 감수)
 
 ## 모델 전환이 느릴 때
 
